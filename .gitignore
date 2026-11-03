@@ -1,0 +1,6 @@
+# Руководство ГИИС ДМДК — чужой документ (АО «Гознак»), в репозиторий не кладём.
+# Текст из него (giis-dmdk-chunks.txt) тоже собирается локально скриптом prepare_docs.py.
+docs/*.pdf
+docs/*.txt
+__pycache__/
+eval/results-partial.json

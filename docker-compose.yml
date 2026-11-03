@@ -1,0 +1,23 @@
+# n8n для учебного RAG-ассистента по ГИИС ДМДК.
+# Модели работают в Ollama на этом же компьютере (http://host.docker.internal:11434).
+services:
+  n8n:
+    image: n8nio/n8n:stable
+    container_name: n8n-rag
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5678:5678"   # открыт только на этом компьютере
+    environment:
+      - GENERIC_TIMEZONE=Europe/Moscow
+      - TZ=Europe/Moscow
+      - N8N_SECURE_COOKIE=false          # вход по http://localhost
+      - N8N_RESTRICT_FILE_ACCESS_TO=/files
+      - N8N_DIAGNOSTICS_ENABLED=false
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - n8n_data:/home/node/.n8n         # сценарии и учётные данные
+      - ./docs:/files:ro                 # документы для базы знаний (только чтение)
+
+volumes:
+  n8n_data:

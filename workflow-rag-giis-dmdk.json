@@ -1,0 +1,179 @@
+[
+  {
+    "id": "ragGiisDmdk0001",
+    "name": "RAG: помощник по ГИИС ДМДК",
+    "active": false,
+    "settings": { "executionOrder": "v1" },
+    "nodes": [
+      {
+        "id": "a1000000-0000-4000-8000-000000000001",
+        "name": "1. Запустить загрузку",
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [0, 0],
+        "parameters": {}
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000007",
+        "name": "1б. Загрузка по запросу (POST /webhook/giis-ingest)",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [0, -200],
+        "webhookId": "b2000000-0000-4000-8000-000000000007",
+        "parameters": { "httpMethod": "POST", "path": "giis-ingest", "responseMode": "onReceived", "options": {} }
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000002",
+        "name": "2. Прочитать подготовленный текст",
+        "type": "n8n-nodes-base.readWriteFile",
+        "typeVersion": 1.1,
+        "position": [240, 0],
+        "parameters": { "operation": "read", "fileSelector": "/files/giis-dmdk-chunks.txt", "options": {} }
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000003",
+        "name": "3. Сохранить в базу знаний",
+        "type": "@n8n/n8n-nodes-langchain.vectorStoreInMemory",
+        "typeVersion": 1.4,
+        "position": [500, 0],
+        "parameters": {
+          "mode": "insert",
+          "memoryKey": { "__rl": true, "mode": "id", "value": "giis_dmdk" },
+          "clearStore": false,
+          "embeddingBatchSize": 16
+        }
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000004",
+        "name": "Эмбеддинги bge-m3 (загрузка)",
+        "type": "@n8n/n8n-nodes-langchain.embeddingsOllama",
+        "typeVersion": 1,
+        "position": [420, 260],
+        "parameters": { "model": "bge-m3:latest" },
+        "credentials": { "ollamaApi": { "id": "ollamaLocal00001", "name": "Ollama (этот компьютер)" } }
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000005",
+        "name": "Чтение текста",
+        "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+        "typeVersion": 1.1,
+        "position": [640, 260],
+        "parameters": {
+          "dataType": "binary",
+          "loader": "textLoader",
+          "textSplittingMode": "custom",
+          "options": {}
+        }
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000006",
+        "name": "Нарезка на фрагменты",
+        "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+        "typeVersion": 1,
+        "position": [700, 460],
+        "parameters": { "chunkSize": 950, "chunkOverlap": 0, "options": {} }
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000011",
+        "name": "Чат: вопрос",
+        "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+        "typeVersion": 1.5,
+        "position": [0, 700],
+        "webhookId": "b2000000-0000-4000-8000-000000000011",
+        "parameters": { "options": {} }
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000017",
+        "name": "Вопрос по API (POST /webhook/giis-ask)",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [0, 500],
+        "webhookId": "b2000000-0000-4000-8000-000000000017",
+        "parameters": { "httpMethod": "POST", "path": "giis-ask", "responseMode": "lastNode", "options": {} }
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000012",
+        "name": "Ответ по руководству",
+        "type": "@n8n/n8n-nodes-langchain.chainRetrievalQa",
+        "typeVersion": 1.7,
+        "position": [260, 700],
+        "parameters": {
+          "promptType": "define",
+          "text": "={{ $json.chatInput || $json.body.question }}",
+          "options": {
+            "systemPromptTemplate": "Ты помощник по работе в ГИИС ДМДК. Отвечай по-русски, коротко и по шагам.\nОтвечай ТОЛЬКО по фрагментам руководства пользователя ниже. Если в них нет ответа, так и скажи: «В руководстве этого не нашла» — и не придумывай.\nВ конце напиши «Источник: стр. N» — номер страницы указан в начале каждого фрагмента в квадратных скобках.\n----------------\nФрагменты руководства:\n{context}"
+          }
+        }
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000013",
+        "name": "Модель qwen2.5:7b",
+        "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+        "typeVersion": 1,
+        "position": [160, 920],
+        "parameters": {
+          "model": "qwen2.5:7b",
+          "options": { "temperature": 0.1, "numCtx": 4096, "numPredict": 700, "keepAlive": "60m" }
+        },
+        "credentials": { "ollamaApi": { "id": "ollamaLocal00001", "name": "Ollama (этот компьютер)" } }
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000014",
+        "name": "Поиск фрагментов (4 лучших)",
+        "type": "@n8n/n8n-nodes-langchain.retrieverVectorStore",
+        "typeVersion": 1,
+        "position": [420, 920],
+        "parameters": { "topK": 4 }
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000018",
+        "name": "Текст ответа",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [560, 700],
+        "parameters": {
+          "mode": "manual",
+          "assignments": { "assignments": [
+            { "id": "c3000000-0000-4000-8000-000000000001", "name": "output", "value": "={{ $json.response }}", "type": "string" }
+          ] },
+          "options": {}
+        }
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000015",
+        "name": "База знаний",
+        "type": "@n8n/n8n-nodes-langchain.vectorStoreInMemory",
+        "typeVersion": 1.4,
+        "position": [420, 1120],
+        "parameters": {
+          "mode": "retrieve",
+          "memoryKey": { "__rl": true, "mode": "id", "value": "giis_dmdk" }
+        }
+      },
+      {
+        "id": "a1000000-0000-4000-8000-000000000016",
+        "name": "Эмбеддинги bge-m3 (поиск)",
+        "type": "@n8n/n8n-nodes-langchain.embeddingsOllama",
+        "typeVersion": 1,
+        "position": [420, 1320],
+        "parameters": { "model": "bge-m3:latest" },
+        "credentials": { "ollamaApi": { "id": "ollamaLocal00001", "name": "Ollama (этот компьютер)" } }
+      }
+    ],
+    "connections": {
+      "1. Запустить загрузку": { "main": [[{ "node": "2. Прочитать подготовленный текст", "type": "main", "index": 0 }]] },
+      "1б. Загрузка по запросу (POST /webhook/giis-ingest)": { "main": [[{ "node": "2. Прочитать подготовленный текст", "type": "main", "index": 0 }]] },
+      "Вопрос по API (POST /webhook/giis-ask)": { "main": [[{ "node": "Ответ по руководству", "type": "main", "index": 0 }]] },
+      "Ответ по руководству": { "main": [[{ "node": "Текст ответа", "type": "main", "index": 0 }]] },
+      "2. Прочитать подготовленный текст": { "main": [[{ "node": "3. Сохранить в базу знаний", "type": "main", "index": 0 }]] },
+      "Эмбеддинги bge-m3 (загрузка)": { "ai_embedding": [[{ "node": "3. Сохранить в базу знаний", "type": "ai_embedding", "index": 0 }]] },
+      "Чтение текста": { "ai_document": [[{ "node": "3. Сохранить в базу знаний", "type": "ai_document", "index": 0 }]] },
+      "Нарезка на фрагменты": { "ai_textSplitter": [[{ "node": "Чтение текста", "type": "ai_textSplitter", "index": 0 }]] },
+      "Чат: вопрос": { "main": [[{ "node": "Ответ по руководству", "type": "main", "index": 0 }]] },
+      "Модель qwen2.5:7b": { "ai_languageModel": [[{ "node": "Ответ по руководству", "type": "ai_languageModel", "index": 0 }]] },
+      "Поиск фрагментов (4 лучших)": { "ai_retriever": [[{ "node": "Ответ по руководству", "type": "ai_retriever", "index": 0 }]] },
+      "База знаний": { "ai_vectorStore": [[{ "node": "Поиск фрагментов (4 лучших)", "type": "ai_vectorStore", "index": 0 }]] },
+      "Эмбеддинги bge-m3 (поиск)": { "ai_embedding": [[{ "node": "База знаний", "type": "ai_embedding", "index": 0 }]] }
+    }
+  }
+]
